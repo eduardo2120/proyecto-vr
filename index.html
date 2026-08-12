@@ -79,10 +79,15 @@
 
   <a-scene background="color: #cdd7e0" cursor="rayOrigin: mouse" fog="type: linear; color: #cdd7e0; near: 45; far: 90" vr-mode-ui="enabled: true">
 
-    <a-camera id="camara" position="0 1.6 4"
-      wasd-controls="fly:true"
-      look-controls="magicWindowTrackingEnabled: false; touchEnabled: false; pointerLockEnabled: true">
-    </a-camera>
+    <!-- El "rig" es el que camina (wasd-controls). La cámara, adentro, solo gira
+         (look-controls). Así, en modo VR, cuando el dispositivo o el mouse toman
+         el control de la rotación de la cámara, el desplazamiento del rig no se
+         pisa cada frame y W/A/S/D siguen moviendo al visitante. -->
+    <a-entity id="rig" position="0 1.6 4" wasd-controls="fly:true; acceleration:35">
+      <a-camera id="camara" position="0 0 0"
+        look-controls="magicWindowTrackingEnabled: false; touchEnabled: false; pointerLockEnabled: true">
+      </a-camera>
+    </a-entity>
 
     <a-entity light="type: ambient; intensity: 0.8; color: #ffffff"></a-entity>
     <a-entity light="type: directional; intensity: 0.5; color: #ffffff" position="10 20 10"></a-entity>
@@ -465,8 +470,10 @@
   function teletransportarSala(key) {
     const destino = puntosEntrada[key];
     if (!destino) return;
-    const cam = document.querySelector('#camara').object3D;
-    cam.position.set(destino.x, destino.y, destino.z);
+    // Se mueve el rig (no la cámara): el rig es quien tiene la posición real
+    // del visitante; la cámara solo gira dentro de él.
+    const rig = document.querySelector('#rig').object3D;
+    rig.position.set(destino.x, destino.y, destino.z);
     salaActual = key;
     actualizarHUD();
   }
@@ -499,9 +506,9 @@
   ========================================================= */
   function iniciarDeteccionSala() {
     setInterval(() => {
-      const camEl = document.querySelector('#camara');
-      if (!camEl || !camEl.object3D) return;
-      const p = camEl.object3D.position;
+      const rigEl = document.querySelector('#rig');
+      if (!rigEl || !rigEl.object3D) return;
+      const p = rigEl.object3D.position;
       let encontrado = null;
       if (Math.abs(p.x) < 5 && Math.abs(p.z) < 5) {
         encontrado = 'vestibulo';
