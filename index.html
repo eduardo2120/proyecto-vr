@@ -43,17 +43,45 @@
 
   <div id="hud">
     📍 Sala actual: <b id="hudSala">Vestíbulo</b><br>
-    WASD para caminar · arrastra el mouse para mirar
+    <span id="controlesTexto">WASD para caminar · mouse para mirar</span><br>
+    🥽 En VR: mueve la cabeza para mirar · Bluetooth: WASD + mouse
   </div>
 
   <div id="panel">
     <button onclick="hablarConRobot()">🤖 Hablar con ARIA</button>
     <button onclick="volverVestibulo()">🏛️ Volver al vestíbulo</button>
+    <button id="botonVR" onclick="alternarVR()">🥽 Entrar a VR</button>
   </div>
 
-  <a-scene background="color: #cdd7e0" cursor="rayOrigin: mouse" fog="type: linear; color: #cdd7e0; near: 45; far: 90">
+  <a-scene
+    id="escenaVR"
+    background="color: #cdd7e0"
+    cursor="rayOrigin: mouse"
+    raycaster="objects: .interactivo"
+    vr-mode-ui="enabled: true"
+    renderer="colorManagement: true; physicallyCorrectLights: true"
+    fog="type: linear; color: #cdd7e0; near: 45; far: 90">
 
-    <a-camera id="camara" position="0 1.6 4" wasd-controls="fly:true" look-controls></a-camera>
+    <a-camera
+      id="camara"
+      position="0 1.6 4"
+      wasd-controls="acceleration: 35; fly: true"
+      look-controls="pointerLockEnabled: false; touchEnabled: true">
+
+      <!-- Cursor por mirada para seleccionar objetos dentro del visor VR -->
+      <a-cursor
+        id="cursorVR"
+        class="interactivo"
+        fuse="true"
+        fuse-timeout="1200"
+        raycaster="objects: .interactivo"
+        material="color: #4CC3D9; shader: flat"
+        geometry="primitive: ring; radiusInner: 0.008; radiusOuter: 0.014"
+        position="0 0 -1"
+        visible="false">
+      </a-cursor>
+
+    </a-camera>
 
     <a-entity light="type: ambient; intensity: 0.8; color: #ffffff"></a-entity>
     <a-entity light="type: directional; intensity: 0.5; color: #ffffff" position="10 20 10"></a-entity>
@@ -139,6 +167,7 @@
     e.setAttribute('width', w); e.setAttribute('height', h); e.setAttribute('depth', d);
     e.setAttribute('color', color);
     if (extra) Object.keys(extra).forEach(k => e.setAttribute(k, extra[k]));
+    if (extra && extra.onclick) e.classList.add('interactivo');
     cont.appendChild(e);
     return e;
   }
@@ -149,6 +178,7 @@
     e.setAttribute('radius', r); e.setAttribute('height', h);
     e.setAttribute('color', color);
     if (extra) Object.keys(extra).forEach(k => e.setAttribute(k, extra[k]));
+    if (extra && extra.onclick) e.classList.add('interactivo');
     cont.appendChild(e);
     return e;
   }
@@ -489,6 +519,89 @@
   }
 
   /* =========================================================
+     CONTROLES VR / TELÉFONO / TECLADO Y MOUSE
+  ========================================================= */
+
+  function esVR() {
+    return escena.is('vr-mode');
+  }
+
+  function actualizarInterfazVR() {
+    const cursorVR = document.getElementById('cursorVR');
+    const botonVR = document.getElementById('botonVR');
+    const controles = document.getElementById('controlesTexto');
+
+    if (esVR()) {
+      if (cursorVR) cursorVR.setAttribute('visible', true);
+      if (botonVR) botonVR.textContent = '📱 Salir de VR';
+      if (controles) {
+        controles.textContent =
+          '🥽 VR: mueve la cabeza · mira un objeto 1.2 s para seleccionarlo';
+      }
+    } else {
+      if (cursorVR) cursorVR.setAttribute('visible', false);
+      if (botonVR) botonVR.textContent = '🥽 Entrar a VR';
+      if (controles) {
+        controles.textContent =
+          'WASD para caminar · mouse para mirar';
+      }
+    }
+  }
+
+  function alternarVR() {
+    if (!escena) return;
+
+    if (esVR()) {
+      escena.exitVR();
+      return;
+    }
+
+    if (!navigator.xr) {
+      alert(
+        'Tu navegador no habilita WebXR en este momento. ' +
+        'Abre este archivo mediante HTTPS y usa un navegador compatible con WebXR.'
+      );
+      return;
+    }
+
+    escena.enterVR();
+  }
+
+  // Cuando entra/sale del modo VR, actualizamos la interfaz.
+  escena.addEventListener('enter-vr', actualizarInterfazVR);
+  escena.addEventListener('exit-vr', actualizarInterfazVR);
+
+  // Evita que un toque accidental en el teléfono provoque movimientos raros
+  // mientras se está usando el visor.
+  document.addEventListener('touchstart', () => {
+    if (esVR()) return;
+  }, { passive: true });
+
+  // Atajos de teclado:
+  // W/S/A/D = movimiento.
+  // R = volver al vestíbulo.
+  // V = entrar/salir de VR.
+  document.addEventListener('keydown', (e) => {
+    if (e.target && ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
+    if (e.key.toLowerCase() === 'r') {
+      volverVestibulo();
+    }
+
+    if (e.key.toLowerCase() === 'v') {
+      alternarVR();
+    }
+  });
+
+  // Cuando el dispositivo cambia de orientación, A-Frame mantiene
+  // la orientación de la cámara en VR mediante WebXR.
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+      actualizarInterfazVR();
+    }, 300);
+  });
+
+  /* =========================================================
      CONSTRUCCIÓN DE LA ESCENA
   ========================================================= */
   crearVestibulo();
@@ -496,6 +609,7 @@
   aplicarTexturaPisos();
   iniciarDeteccionSala();
   actualizarHUD();
+  actualizarInterfazVR();
   </script>
 
 </body>
