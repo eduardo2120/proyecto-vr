@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Museo Interactivo - Ciencias de la Computación</title>
+<script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; font-family: 'Segoe UI', Arial, sans-serif; }
+
+  #hud {
+    position: fixed; top: 14px; left: 14px; z-index: 20;
+    background: rgba(10,20,30,0.72);
+    border: 2px solid #4CC3D9;
+    border-radius: 10px;
+    color: #eafcff;
+    padding: 10px 16px;
+    font-size: 14px;
+    letter-spacing: 0.4px;
+    box-shadow: 0 0 12px rgba(76,195,217,0.5);
+    max-width: 260px;
+  }
+  #hud b { color: #FFD24C; }
+
+  #panel {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    z-index: 20; display: flex; gap: 10px;
+  }
+  #panel button {
+    background: rgba(10,20,30,0.82);
+    border: 2px solid #4CC3D9;
+    color: #eafcff;
+    padding: 10px 16px;
+    border-radius: 24px;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(76,195,217,0.4);
+  }
+  #panel button:active { background: #4CC3D9; color: #08222b; }
+</style>
+</head>
+
+<body>
+
+  <div id="hud">
+    📍 Sala actual: <b id="hudSala">Vestíbulo</b><br>
+    WASD para caminar · arrastra el mouse para mirar
+  </div>
+
+  <div id="panel">
+    <button onclick="hablarConRobot()">🤖 Hablar con ARIA</button>
+    <button onclick="volverVestibulo()">🏛️ Volver al vestíbulo</button>
+  </div>
+
+  <a-scene background="color: #cdd7e0" cursor="rayOrigin: mouse" fog="type: linear; color: #cdd7e0; near: 45; far: 90">
+
+    <a-camera id="camara" position="0 1.6 4" wasd-controls="fly:true" look-controls></a-camera>
+
+    <a-entity light="type: ambient; intensity: 0.8; color: #ffffff"></a-entity>
+    <a-entity light="type: directional; intensity: 0.5; color: #ffffff" position="10 20 10"></a-entity>
+
+  </a-scene>
+
+  <script>
+  /* =========================================================
+     DATOS: 4 materias y sus temas
+  ========================================================= */
+  const salas = [
+    {
+      key: 'programacion', nombre: 'Programación', color: '#1d4ed8',
+      dir: 'norte', cx: 0, cz: -20, rot: 0,
+      temas: [
+        { t: 'Variables y tipos de datos', d: 'Cómo se almacenan y clasifican los datos en un programa.' },
+        { t: 'Estructuras de control', d: 'if, switch y ciclos que controlan el flujo del programa.' },
+        { t: 'Funciones y procedimientos', d: 'Bloques de código reutilizables que reciben y devuelven datos.' },
+        { t: 'Arreglos y matrices', d: 'Colecciones ordenadas de datos accesibles por índice.' },
+        { t: 'Programación orientada a objetos', d: 'Clases, objetos, herencia y polimorfismo.' },
+        { t: 'Manejo de archivos', d: 'Lectura y escritura de información en archivos externos.' },
+        { t: 'Excepciones y depuración', d: 'Detección y manejo de errores durante la ejecución.' }
+      ]
+    },
+    {
+      key: 'basededatos', nombre: 'Bases de Datos', color: '#16a34a',
+      dir: 'este', cx: 20, cz: 0, rot: 270,
+      temas: [
+        { t: 'Modelo entidad-relación', d: 'Representación gráfica de entidades y sus relaciones.' },
+        { t: 'Normalización', d: 'Proceso para eliminar redundancia en las tablas.' },
+        { t: 'Álgebra relacional', d: 'Operaciones formales sobre relaciones de datos.' },
+        { t: 'Lenguaje SQL', d: 'SELECT, INSERT, UPDATE y DELETE para manipular datos.' },
+        { t: 'Llaves primarias y foráneas', d: 'Mecanismos para identificar y relacionar registros.' },
+        { t: 'Procedimientos almacenados y triggers', d: 'Lógica que se ejecuta automáticamente dentro de la base de datos.' },
+        { t: 'Administración y seguridad', d: 'Control de accesos, respaldos y protección de datos.' }
+      ]
+    },
+    {
+      key: 'redes', nombre: 'Redes de Computadoras', color: '#ea580c',
+      dir: 'oeste', cx: -20, cz: 0, rot: 90,
+      temas: [
+        { t: 'Modelo OSI y TCP/IP', d: 'Capas que estandarizan la comunicación entre dispositivos.' },
+        { t: 'Direccionamiento IP', d: 'Identificación de dispositivos con IPv4 e IPv6.' },
+        { t: 'Subneteo', d: 'División de redes en subredes más pequeñas.' },
+        { t: 'Dispositivos de red', d: 'Switches, routers y access points que forman la red.' },
+        { t: 'Protocolos de comunicación', d: 'HTTP, FTP, DNS y DHCP en acción.' },
+        { t: 'Seguridad en redes', d: 'Firewalls, cifrado y buenas prácticas de protección.' },
+        { t: 'Configuración básica de redes', d: 'Puesta en marcha de una red funcional.' }
+      ]
+    },
+    {
+      key: 'ingenieria', nombre: 'Ingeniería de Software', color: '#7c3aed',
+      dir: 'sur', cx: 0, cz: 20, rot: 180,
+      temas: [
+        { t: 'Ciclo de vida del software', d: 'Etapas desde la idea hasta el mantenimiento.' },
+        { t: 'Metodologías ágiles', d: 'Scrum y Kanban para gestionar proyectos.' },
+        { t: 'Análisis de requisitos', d: 'Identificación de lo que el sistema debe hacer.' },
+        { t: 'Diseño de software (UML)', d: 'Diagramas que modelan la estructura del sistema.' },
+        { t: 'Arquitectura de software', d: 'Organización general de los componentes del sistema.' },
+        { t: 'Pruebas de software', d: 'Verificación de que el sistema funcione correctamente.' },
+        { t: 'Mantenimiento y documentación', d: 'Cuidado y registro del software a lo largo del tiempo.' }
+      ]
+    }
+  ];
+
+  // Puntos de teletransporte: justo dentro de cada sala, y el vestíbulo
+  const puntosEntrada = {
+    vestibulo:    { x: 0,   y: 1.6, z: 3   },
+    programacion: { x: 0,   y: 1.6, z: -13 },
+    basededatos:  { x: 13,  y: 1.6, z: 0   },
+    redes:        { x: -13, y: 1.6, z: 0   },
+    ingenieria:   { x: 0,   y: 1.6, z: 13  }
+  };
+
+  /* =========================================================
+     HELPERS GENÉRICOS
+  ========================================================= */
+  const escena = document.querySelector('a-scene');
+
+  function caja(cont, pos, w, h, d, color, extra) {
+    const e = document.createElement('a-box');
+    e.setAttribute('position', pos.join(' '));
+    e.setAttribute('width', w); e.setAttribute('height', h); e.setAttribute('depth', d);
+    e.setAttribute('color', color);
+    if (extra) Object.keys(extra).forEach(k => e.setAttribute(k, extra[k]));
+    cont.appendChild(e);
+    return e;
+  }
+
+  function cilindro(cont, pos, r, h, color, extra) {
+    const e = document.createElement('a-cylinder');
+    e.setAttribute('position', pos.join(' '));
+    e.setAttribute('radius', r); e.setAttribute('height', h);
+    e.setAttribute('color', color);
+    if (extra) Object.keys(extra).forEach(k => e.setAttribute(k, extra[k]));
+    cont.appendChild(e);
+    return e;
+  }
+
+  function esfera(cont, pos, r, color) {
+    const e = document.createElement('a-sphere');
+    e.setAttribute('position', pos.join(' '));
+    e.setAttribute('radius', r);
+    e.setAttribute('color', color);
+    cont.appendChild(e);
+    return e;
+  }
+
+  function texto(cont, pos, valor, color, ancho, alinear) {
+    const e = document.createElement('a-text');
+    e.setAttribute('position', pos.join(' '));
+    e.setAttribute('value', valor);
+    e.setAttribute('color', color || '#111');
+    e.setAttribute('width', ancho || 4);
+    e.setAttribute('align', alinear || 'center');
+    cont.appendChild(e);
+    return e;
+  }
+
+  function piso(cont, w, d, color) {
+    const p = document.createElement('a-plane');
+    p.setAttribute('position', '0 0.01 0');
+    p.setAttribute('rotation', '-90 0 0');
+    p.setAttribute('width', w); p.setAttribute('height', d);
+    p.setAttribute('color', color || '#e9ecef');
+    p.classList.add('piso-museo');
+    cont.appendChild(p);
+    return p;
+  }
+
+  // Pared con hueco centrado (para puertas/pasillos), en el eje que se indique
+  function paredNS(cont, z, half, gap, color, height) { // pared que corre en X, fija en Z
+    const segLen = (half * 2 - gap) / 2;
+    const offset = gap / 2 + segLen / 2;
+    caja(cont, [-offset, height / 2, z], segLen, height, 0.2, color);
+    caja(cont, [offset, height / 2, z], segLen, height, 0.2, color);
+  }
+  function paredEO(cont, x, half, gap, color, height) { // pared que corre en Z, fija en X
+    const segLen = (half * 2 - gap) / 2;
+    const offset = gap / 2 + segLen / 2;
+    caja(cont, [x, height / 2, -offset], 0.2, height, segLen, color);
+    caja(cont, [x, height / 2, offset], 0.2, height, segLen, color);
+  }
+
+  /* =========================================================
+     VESTÍBULO (hub central) con robot guía ARIA
+  ========================================================= */
+  function crearVestibulo() {
+    const cont = document.createElement('a-entity');
+    cont.setAttribute('id', 'vestibulo');
+    escena.appendChild(cont);
+
+    const half = 5, gap = 3, height = 5;
+    piso(cont, half * 2, half * 2, '#dfe4e8');
+
+    paredNS(cont, -half, half, gap, '#f4f6f7', height); // norte -> programación
+    paredNS(cont, half, half, gap, '#f4f6f7', height);  // sur -> ingeniería
+    paredEO(cont, half, half, gap, '#f4f6f7', height);  // este -> bases de datos
+    paredEO(cont, -half, half, gap, '#f4f6f7', height); // oeste -> redes
+
+    // Dinteles y letreros de colores sobre cada puerta, orientan sin hablar con el robot
+    const letreros = [
+      { key: 'programacion', pos: [0, 0, -half] },
+      { key: 'ingenieria', pos: [0, 0, half] },
+      { key: 'basededatos', pos: [half, 0, 0] },
+      { key: 'redes', pos: [-half, 0, 0] }
+    ];
+    letreros.forEach(l => {
+      const sala = salas.find(s => s.key === l.key);
+      const dintel = caja(cont, [l.pos[0], 4.2, l.pos[2]], 3.4, 0.15, 0.3, sala.color);
+      dintel.setAttribute('onclick', `teletransportarSala('${sala.key}')`);
+      texto(cont, [l.pos[0], 3.75, l.pos[2] + (l.pos[2] !== 0 ? (l.pos[2] > 0 ? 0.2 : -0.2) : 0)], sala.nombre, sala.color, 3.2);
+    });
+
+    texto(cont, [0, 4.4, 0.2], 'Museo Interactivo\nCiencias de la Computación', '#12233f', 6);
+
+    crearRobot(cont, 0, 0, -1.8);
+
+    // Pasillos que conectan el vestíbulo con cada sala
+    crearPasillo('norte'); crearPasillo('sur'); crearPasillo('este'); crearPasillo('oeste');
+  }
+
+  function crearPasillo(dir) {
+    const cont = document.createElement('a-entity');
+    escena.appendChild(cont);
+    const largo = 7, ancho = 3, height = 5;
+    let cx = 0, cz = 0, esNS = true;
+    if (dir === 'norte') { cx = 0; cz = -8.5; esNS = true; }
+    if (dir === 'sur')   { cx = 0; cz = 8.5;  esNS = true; }
+    if (dir === 'este')  { cx = 8.5; cz = 0;  esNS = false; }
+    if (dir === 'oeste') { cx = -8.5; cz = 0; esNS = false; }
+
+    cont.setAttribute('position', cx + ' 0 ' + cz);
+    const p = document.createElement('a-plane');
+    p.setAttribute('position', '0 0.01 0');
+    p.setAttribute('rotation', '-90 0 0');
+    p.setAttribute('width', esNS ? ancho : largo);
+    p.setAttribute('height', esNS ? largo : ancho);
+    p.setAttribute('color', '#dfe4e8');
+    p.classList.add('piso-museo');
+    cont.appendChild(p);
+
+    if (esNS) {
+      caja(cont, [-ancho / 2, height / 2, 0], 0.2, height, largo, '#eef1f3');
+      caja(cont, [ancho / 2, height / 2, 0], 0.2, height, largo, '#eef1f3');
+    } else {
+      caja(cont, [0, height / 2, -ancho / 2], largo, height, 0.2, '#eef1f3');
+      caja(cont, [0, height / 2, ancho / 2], largo, height, 0.2, '#eef1f3');
+    }
+  }
+
+  /* =========================================================
+     ROBOT GUÍA "ARIA"
+  ========================================================= */
+  function crearRobot(cont, x, y, z) {
+    const g = document.createElement('a-entity');
+    g.setAttribute('id', 'robotAria');
+    g.setAttribute('position', x + ' ' + y + ' ' + z);
+    g.setAttribute('animation', 'property: position; to: ' + x + ' ' + (y + 0.18) + ' ' + z + '; dir: alternate; loop: true; dur: 1400; easing: easeInOutSine');
+    cont.appendChild(g);
+
+    cilindro(g, [0, 0.15, 0], 0.5, 0.15, '#33445c');
+    const cuerpo = caja(g, [0, 0.75, 0], 0.9, 1.1, 0.6, '#5b7c99', { onclick: 'hablarConRobot()' });
+    const cabeza = caja(g, [0, 1.55, 0], 0.55, 0.5, 0.5, '#dfe6ea', { onclick: 'hablarConRobot()' });
+    esfera(g, [-0.13, 1.6, 0.24], 0.07, '#33e6ff');
+    esfera(g, [0.13, 1.6, 0.24], 0.07, '#33e6ff');
+    cilindro(g, [0, 1.95, 0], 0.02, 0.35, '#444');
+    esfera(g, [0, 2.15, 0], 0.06, '#ff5252');
+    cilindro(g, [-0.55, 1.0, 0], 0.06, 0.6, '#5b7c99', { rotation: '0 0 20' });
+    cilindro(g, [0.55, 1.0, 0], 0.06, 0.6, '#5b7c99', { rotation: '0 0 -20' });
+
+    texto(g, [0, 2.5, 0], 'ARIA\n(toca para hablar)', '#12233f', 3);
+  }
+
+  /* =========================================================
+     ÍCONOS TEMÁTICOS PARA CADA SALA
+  ========================================================= */
+  function iconoProgramacion(cont, x, y, z) {
+    caja(cont, [x, y - 0.5, z], 0.15, 0.5, 0.15, '#444');
+    caja(cont, [x, y, z], 1.1, 0.8, 0.1, '#2b2b2b');
+    caja(cont, [x, y, z + 0.06], 0.95, 0.65, 0.02, '#0b1e33');
+    texto(cont, [x, y, z + 0.09], '</>', '#4CC3D9', 3);
+  }
+  function iconoBaseDatos(cont, x, y, z) {
+    cilindro(cont, [x, y - 0.35, z], 0.4, 0.14, '#0f766e');
+    cilindro(cont, [x, y - 0.05, z], 0.4, 0.14, '#14a394');
+    cilindro(cont, [x, y + 0.25, z], 0.4, 0.14, '#5eead4');
+  }
+  function iconoRedes(cont, x, y, z) {
+    caja(cont, [x, y, z], 0.9, 0.4, 0.35, '#333');
+    caja(cont, [x - 0.28, y + 0.38, z], 0.04, 0.4, 0.04, '#333', { rotation: '0 0 15' });
+    caja(cont, [x + 0.28, y + 0.38, z], 0.04, 0.4, 0.04, '#333', { rotation: '0 0 -15' });
+    esfera(cont, [x - 0.3, y + 0.05, z + 0.19], 0.035, '#22c55e');
+    esfera(cont, [x - 0.1, y + 0.05, z + 0.19], 0.035, '#facc15');
+    esfera(cont, [x + 0.1, y + 0.05, z + 0.19], 0.035, '#22c55e');
+  }
+  function iconoIngenieria(cont, x, y, z) {
+    caja(cont, [x, y, z], 1, 0.7, 0.06, '#f5f5f5');
+    caja(cont, [x, y + 0.18, z + 0.04], 0.9, 0.025, 0.02, '#333');
+    caja(cont, [x, y - 0.08, z + 0.04], 0.9, 0.025, 0.02, '#333');
+    texto(cont, [x, y + 0.28, z + 0.05], 'UML', '#333', 3);
+  }
+
+  /* =========================================================
+     VITRINA (pedestal con caja de vidrio y ficha del tema)
+  ========================================================= */
+  function crearVitrina(cont, sala, idx, x, z, rotY) {
+    const g = document.createElement('a-entity');
+    g.setAttribute('position', x + ' 0 ' + z);
+    g.setAttribute('rotation', '0 ' + rotY + ' 0');
+    cont.appendChild(g);
+
+    const onclick = `mostrarInfoTema('${sala.key}', ${idx})`;
+    cilindro(g, [0, 0.45, 0], 0.5, 0.9, sala.color, { onclick });
+    caja(g, [0, 1.25, 0], 1.05, 0.6, 1.05, '#bfe3f0', {
+      material: 'shader: flat; transparent: true; opacity: 0.35',
+      onclick
+    });
+    texto(g, [0, 0.95, 0.53], String(idx + 1), '#ffffff', 2);
+    texto(g, [0, 1.9, 0], sala.temas[idx].t, '#12233f', 2.6);
+  }
+
+  /* =========================================================
+     CARTEL "VOLVER AL VESTÍBULO" dentro de cada sala
+  ========================================================= */
+  function crearCartelVolver(cont, x, y, z) {
+    const g = document.createElement('a-entity');
+    g.setAttribute('position', x + ' ' + y + ' ' + z);
+    cont.appendChild(g);
+    caja(g, [0, 0, 0], 1.6, 0.5, 0.08, '#12233f', { onclick: 'volverVestibulo()' });
+    texto(g, [0, 0, 0.06], '◀ Volver al vestíbulo', '#ffffff', 2.6);
+  }
+
+  /* =========================================================
+     CONSTRUCTOR DE CADA SALA TEMÁTICA
+  ========================================================= */
+  function construirSala(sala) {
+    const cont = document.createElement('a-entity');
+    cont.setAttribute('id', 'sala_' + sala.key);
+    cont.setAttribute('position', sala.cx + ' 0 ' + sala.cz);
+    cont.setAttribute('rotation', '0 ' + sala.rot + ' 0');
+    escena.appendChild(cont);
+
+    const half = 8, height = 5, gap = 3;
+    piso(cont, half * 2, half * 2, '#eef1f2');
+
+    caja(cont, [0, height / 2, -half], half * 2, height, 0.2, '#f4f6f7'); // pared del fondo
+    paredNS(cont, half, half, gap, '#f4f6f7', height);                    // pared de entrada (con hueco)
+    caja(cont, [half, height / 2, 0], 0.2, height, half * 2, '#f4f6f7');  // pared este
+    caja(cont, [-half, height / 2, 0], 0.2, height, half * 2, '#f4f6f7'); // pared oeste
+
+    // Panel de color y título en la pared del fondo
+    caja(cont, [0, height / 2 + 0.3, -half + 0.11], half * 2 - 2, height - 1.4, 0.05, sala.color);
+    texto(cont, [0, height - 0.9, -half + 0.18], sala.nombre, '#ffffff', 9);
+
+    // Ícono temático
+    if (sala.key === 'programacion') iconoProgramacion(cont, 0, 2.3, -half + 0.35);
+    else if (sala.key === 'basededatos') iconoBaseDatos(cont, 0, 2.3, -half + 0.35);
+    else if (sala.key === 'redes') iconoRedes(cont, 0, 2.3, -half + 0.35);
+    else iconoIngenieria(cont, 0, 2.3, -half + 0.35);
+
+    // Zócalo de color a lo largo de las paredes
+    caja(cont, [0, 0.35, -half + 0.11], half * 2 - 0.4, 0.5, 0.04, sala.color);
+
+    // 7 vitrinas: 4 a la izquierda, 3 a la derecha, mirando al pasillo central
+    const izqZ = [-5, -1.7, 1.7, 5];
+    const derZ = [-3.3, 0, 3.3];
+    izqZ.forEach((z, i) => crearVitrina(cont, sala, i, -5.5, z, 90));
+    derZ.forEach((z, i) => crearVitrina(cont, sala, i + 4, 5.5, z, -90));
+
+    crearCartelVolver(cont, 0, 1.6, half - 1.3);
+
+    const luz = document.createElement('a-entity');
+    luz.setAttribute('light', 'type: point; intensity: 0.55; distance: 22; color: ' + sala.color);
+    luz.setAttribute('position', '0 4.5 0');
+    cont.appendChild(luz);
+  }
+
+  /* =========================================================
+     TEXTURA DE PISO (mármol claro con líneas), aplicada a
+     todos los planos con clase "piso-museo"
+  ========================================================= */
+  function texturaPiso() {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ebeef0'; ctx.fillRect(0, 0, 256, 256);
+    ctx.strokeStyle = '#d3d8db'; ctx.lineWidth = 2;
+    for (let i = 0; i <= 256; i += 64) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(3, 3);
+    return tex;
+  }
+
+  function aplicarTexturaPisos() {
+    document.querySelectorAll('.piso-museo').forEach(p => {
+      p.addEventListener('loaded', function () {
+        const mesh = this.getObject3D('mesh');
+        if (!mesh) return;
+        mesh.material.map = texturaPiso();
+        mesh.material.needsUpdate = true;
+      });
+    });
+  }
+
+  /* =========================================================
+     ESTADO Y NAVEGACIÓN
+  ========================================================= */
+  let nombreVisitante = '';
+  let salaActual = 'vestibulo';
+
+  function actualizarHUD() {
+    const sala = salas.find(s => s.key === salaActual);
+    document.getElementById('hudSala').textContent = sala ? sala.nombre : 'Vestíbulo';
+  }
+
+  function teletransportarSala(key) {
+    const destino = puntosEntrada[key];
+    if (!destino) return;
+    const cam = document.querySelector('#camara').object3D;
+    cam.position.set(destino.x, destino.y, destino.z);
+    salaActual = key;
+    actualizarHUD();
+  }
+
+  function volverVestibulo() {
+    teletransportarSala('vestibulo');
+  }
+
+  function hablarConRobot() {
+    if (!nombreVisitante) {
+      nombreVisitante = prompt('¡Hola! Soy ARIA, tu guía en este museo. ¿Cómo te llamas?') || 'visitante';
+      alert('Mucho gusto, ' + nombreVisitante + '. Este museo tiene 4 salas, una por cada materia. Puedes caminar por los pasillos o decirme a cuál quieres ir.');
+    }
+    const opciones = salas.map((s, i) => (i + 1) + '. ' + s.nombre).join('\n');
+    const resp = prompt('¿A qué sala te gustaría entrar?\n\n' + opciones + '\n\n(escribe el número, o cancela para explorar libremente)');
+    const idx = parseInt(resp, 10) - 1;
+    if (!isNaN(idx) && salas[idx]) {
+      teletransportarSala(salas[idx].key);
+    }
+  }
+
+  function mostrarInfoTema(key, idx) {
+    const sala = salas.find(s => s.key === key);
+    const tema = sala.temas[idx];
+    alert(sala.nombre + ' — Vitrina ' + (idx + 1) + '\n\n' + tema.t + '\n\n' + tema.d);
+  }
+
+  /* =========================================================
+     DETECCIÓN AUTOMÁTICA DE SALA AL CAMINAR
+  ========================================================= */
+  function iniciarDeteccionSala() {
+    setInterval(() => {
+      const camEl = document.querySelector('#camara');
+      if (!camEl || !camEl.object3D) return;
+      const p = camEl.object3D.position;
+      let encontrado = null;
+      if (Math.abs(p.x) < 5 && Math.abs(p.z) < 5) {
+        encontrado = 'vestibulo';
+      } else {
+        for (const s of salas) {
+          if (Math.abs(p.x - s.cx) < 8 && Math.abs(p.z - s.cz) < 8) { encontrado = s.key; break; }
+        }
+      }
+      if (encontrado && encontrado !== salaActual) {
+        salaActual = encontrado;
+        actualizarHUD();
+      }
+    }, 400);
+  }
+
+  /* =========================================================
+     CONSTRUCCIÓN DE LA ESCENA
+  ========================================================= */
+  crearVestibulo();
+  salas.forEach(construirSala);
+  aplicarTexturaPisos();
+  iniciarDeteccionSala();
+  actualizarHUD();
+  </script>
+
+</body>
+</html
